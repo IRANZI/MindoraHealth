@@ -3,15 +3,15 @@
 # container via pm2-runtime (see ecosystem.config.cjs). Postgres/Redis/
 # MongoDB/RabbitMQ/Kong are NOT included — deploy those as separate Railway
 # services and wire their URLs into this container's environment variables.
-# Build from repo root: docker build -f Dockerfile.bundle .
+# Railway build context: /extracted_all; Dockerfile: /Mindora_V3-main/Dockerfile.bundle
 
 FROM node:24-alpine AS build
 WORKDIR /app
 
-COPY package.json turbo.json tsconfig.json tsconfig.base.json ecosystem.config.cjs ./
-COPY apps ./apps
-COPY packages ./packages
-COPY docs ./docs
+COPY Mindora_V3-main/package.json Mindora_V3-main/turbo.json Mindora_V3-main/tsconfig.json Mindora_V3-main/tsconfig.base.json Mindora_V3-main/ecosystem.config.cjs ./
+COPY Mindora_V3-main/apps ./apps
+COPY Mindora_V3-main/packages ./packages
+COPY Mindora_V3-main/docs ./docs
 
 RUN npm install
 
@@ -70,7 +70,6 @@ COPY --from=build /app/apps/messaging-service/dist ./apps/messaging-service/dist
 COPY --from=build /app/apps/messaging-service/package.json ./apps/messaging-service/package.json
 COPY --from=build /app/apps/ai-integration-service/dist ./apps/ai-integration-service/dist
 COPY --from=build /app/apps/ai-integration-service/package.json ./apps/ai-integration-service/package.json
-COPY --from=build /app/apps/ai-integration-service/prisma ./apps/ai-integration-service/prisma
 COPY --from=build /app/apps/notification-service/dist ./apps/notification-service/dist
 COPY --from=build /app/apps/notification-service/package.json ./apps/notification-service/package.json
 COPY --from=build /app/apps/notification-service/prisma ./apps/notification-service/prisma
