@@ -3,15 +3,15 @@
 # container via pm2-runtime (see ecosystem.config.cjs). Postgres/Redis/
 # MongoDB/RabbitMQ/Kong are NOT included — deploy those as separate Railway
 # services and wire their URLs into this container's environment variables.
-# Railway build context: /extracted_all; Dockerfile: /Mindora_V3-main/Dockerfile.bundle
+# Railway build context: repository root; Dockerfile: /extracted_all/Mindora_V3-main/Dockerfile.bundle
 
 FROM node:24-alpine AS build
 WORKDIR /app
 
-COPY Mindora_V3-main/package.json Mindora_V3-main/turbo.json Mindora_V3-main/tsconfig.json Mindora_V3-main/tsconfig.base.json Mindora_V3-main/ecosystem.config.cjs ./
-COPY Mindora_V3-main/apps ./apps
-COPY Mindora_V3-main/packages ./packages
-COPY Mindora_V3-main/docs ./docs
+COPY extracted_all/Mindora_V3-main/package.json extracted_all/Mindora_V3-main/turbo.json extracted_all/Mindora_V3-main/tsconfig.json extracted_all/Mindora_V3-main/tsconfig.base.json extracted_all/Mindora_V3-main/ecosystem.config.cjs ./
+COPY extracted_all/Mindora_V3-main/apps ./apps
+COPY extracted_all/Mindora_V3-main/packages ./packages
+COPY extracted_all/Mindora_V3-main/docs ./docs
 
 RUN npm install
 
