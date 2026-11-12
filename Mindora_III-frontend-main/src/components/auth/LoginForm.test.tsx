@@ -78,8 +78,14 @@ describe("LoginForm", () => {
       "false"
     );
     expect(screen.queryByRole("button", { name: "Admin" })).not.toBeInTheDocument();
-    expect(screen.queryByText(/client\.demo@example\.test/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/therapist\.demo@example\.test/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /client\.demo@example\.test|therapist\.demo@example\.test|admin\.demo@example\.test/i
+      )
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/ClientDemo!2026|TherapistDemo!2026|AdminDemo!2026/)
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/sample (client|therapist) credentials/i)).not.toBeInTheDocument();
   });
 

@@ -8,7 +8,13 @@ import { MindoraLogo } from "@/components/brand/MindoraLogo";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/contexts/AuthContext";
-import { getTestById, testResultStorageKey, type TestDefinition } from "@/lib/mock-data/tests";
+import {
+  getTestById,
+  scoreTest,
+  testResultStorageKey,
+  type TestDefinition,
+} from "@/lib/mock-data/tests";
+import { savePatientScreeningRecord } from "@/lib/mock-data/screening-records";
 import { cn } from "@/lib/utils";
 
 export function TestQuiz({
@@ -39,10 +45,16 @@ export function TestQuiz({
     }
     setError("");
     if (isLast) {
-      window.sessionStorage.setItem(
-        testResultStorageKey(test.id, basePath === "/screenings" ? user?.userId : undefined),
-        JSON.stringify(answers)
+      const storageKey = testResultStorageKey(
+        test.id,
+        basePath === "/screenings" ? user?.userId : undefined
       );
+      const answerStorage =
+        basePath === "/screenings" && user?.userId ? window.localStorage : window.sessionStorage;
+      answerStorage.setItem(storageKey, JSON.stringify(answers));
+      if (basePath === "/screenings" && user?.userId) {
+        savePatientScreeningRecord(user.userId, test, scoreTest(test, answers));
+      }
       router.push(`${basePath}/${test.id}/result`);
       return;
     }

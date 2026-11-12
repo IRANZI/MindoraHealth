@@ -41,7 +41,13 @@ export function TestResultView({
   );
   const raw = useSyncExternalStore(
     subscribe,
-    () => (test ? window.sessionStorage.getItem(storageKey) : null),
+    () =>
+      test
+        ? (basePath === "/screenings" && user?.userId
+            ? window.localStorage
+            : window.sessionStorage
+          ).getItem(storageKey)
+        : null,
     () => null
   );
 

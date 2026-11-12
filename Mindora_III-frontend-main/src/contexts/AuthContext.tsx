@@ -4,6 +4,11 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { useQueryClient } from "@tanstack/react-query";
 import { setAccessToken } from "@/lib/api";
 import {
+  authenticateDemoUser,
+  demoAccessTokenForRole,
+  DEMO_ACCESS_TOKEN_PREFIX,
+} from "@/lib/demo-auth";
+import {
   login as loginRequest,
   logout as logoutRequest,
   refreshSession,
@@ -96,6 +101,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
+      if (process.env.NODE_ENV !== "production") {
+        const demoUser = authenticateDemoUser(email, password);
+        if (demoUser) {
+          queryClient.clear();
+          setToken(demoAccessTokenForRole(demoUser.role));
+          setUser(demoUser);
+          return demoUser;
+        }
+      }
+
       const data = await loginRequest(email, password);
       // Whatever's cached belongs to whoever was signed in before (or nobody) -
       // purge it so a different account never briefly renders with stale data
@@ -121,13 +136,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await logoutRequest();
+      if (!accessToken?.startsWith(`${DEMO_ACCESS_TOKEN_PREFIX}.`)) {
+        await logoutRequest();
+      }
     } finally {
       setToken(null);
       setUser(null);
       queryClient.clear();
     }
-  }, [setToken, queryClient]);
+  }, [accessToken, setToken, queryClient]);
 
   return (
     <AuthContext.Provider

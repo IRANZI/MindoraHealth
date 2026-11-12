@@ -13,11 +13,12 @@ jest.mock("@/contexts/AuthContext", () => ({
 describe("TestResultView", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
+    window.localStorage.clear();
   });
 
   it("shows crisis support for an extremely severe screening result", () => {
     const answers = Object.fromEntries(Array.from({ length: 7 }, (_, index) => [index, 3]));
-    window.sessionStorage.setItem(
+    window.localStorage.setItem(
       testResultStorageKey("dass21-depression", "patient-id"),
       JSON.stringify(answers)
     );

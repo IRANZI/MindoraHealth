@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Clock, FlaskConical, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TESTS } from "@/lib/mock-data/tests";
+import { ScreeningHistory } from "@/components/tests/ScreeningHistory";
 
 export default function ScreeningTestsPage() {
   return (
@@ -53,6 +54,7 @@ export default function ScreeningTestsPage() {
             </article>
           ))}
         </div>
+        <ScreeningHistory />
       </div>
     </div>
   );
