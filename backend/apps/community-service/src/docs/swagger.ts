@@ -1,0 +1,145 @@
+import swaggerJsdoc from 'swagger-jsdoc';
+
+const options: swaggerJsdoc.Options = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Mindora Community Service',
+      version: '1.0.0',
+      description:
+        'API documentation for the Mindora Community Service. Handles community groups, ' +
+        'posts, comments, and reactions.\n\n' +
+        '**Not included in initial deployment, per CEO decision.**\n\n' +
+        "**Anonymous posts and comments encrypt the author's user ID (AES-256-GCM) — the " +
+        'author is never revealed through this API for anonymous content.** There is ' +
+        'currently no Admin Service capability to decrypt it; the encrypted ID exists only ' +
+        'to correlate moderation actions back to a specific author internally if needed.',
+    },
+    servers: [
+      {
+        url: 'http://localhost:3005',
+        description: 'Local development',
+      },
+      {
+        url: 'http://localhost:8000',
+        description: 'Via Kong Gateway (local)',
+      },
+      {
+        url: 'https://api.mindora.rw',
+        description: 'Via Kong Gateway (production)',
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description:
+            'Paste your JWT access token here. Get one from POST /api/v1/auth/login',
+        },
+      },
+      schemas: {
+        CommunityGroup: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string', example: '64f1a2b3c4d5e6f7a8b9c0d1' },
+            name: { type: 'string', example: 'Anxiety Support Circle' },
+            description: {
+              type: 'string',
+              example: 'A safe space for people managing anxiety',
+            },
+            category: {
+              type: 'string',
+              enum: [
+                'ANXIETY',
+                'DEPRESSION',
+                'GRIEF',
+                'RELATIONSHIPS',
+                'STRESS',
+                'ADDICTION',
+                'GENERAL',
+              ],
+            },
+            isAnonymous: { type: 'boolean', example: false },
+            memberCount: { type: 'number', example: 0 },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        Post: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string', example: '64f1a2b3c4d5e6f7a8b9c0d2' },
+            communityId: {
+              type: 'string',
+              example: '64f1a2b3c4d5e6f7a8b9c0d1',
+            },
+            content: {
+              type: 'object',
+              description: 'TipTap document JSON',
+              required: ['type'],
+              properties: {
+                type: { type: 'string', enum: ['doc'] },
+                content: { type: 'array', items: { type: 'object' } },
+              },
+              example: {
+                type: 'doc',
+                content: [
+                  {
+                    type: 'paragraph',
+                    content: [
+                      {
+                        type: 'text',
+                        text: 'Breathing exercises have helped me a lot.',
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+            isAnonymous: { type: 'boolean', example: false },
+            author: {
+              nullable: true,
+              type: 'object',
+              properties: {
+                userId: { type: 'string' },
+              },
+            },
+            reactions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  type: { type: 'string', enum: ['LIKE', 'HEART', 'SUPPORT'] },
+                  count: { type: 'number' },
+                },
+              },
+            },
+            commentCount: { type: 'number', example: 0 },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        ValidationError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'Validation failed' },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  field: { type: 'string' },
+                  message: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  apis: ['./src/routes/*.ts'],
+};
+
+export const swaggerSpec = swaggerJsdoc(options);
