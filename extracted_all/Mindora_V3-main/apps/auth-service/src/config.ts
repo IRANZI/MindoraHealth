@@ -26,6 +26,28 @@ export const config = {
   cookieDomain: process.env.COOKIE_DOMAIN || undefined,
   isProduction: process.env.NODE_ENV === 'production',
   appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:3001',
+  frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  smtp: {
+    host: process.env.SMTP_HOST ?? process.env.EMAIL_HOST ?? 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT ?? process.env.EMAIL_PORT) || 465,
+    secure:
+      process.env.SMTP_SECURE !== undefined
+        ? process.env.SMTP_SECURE === 'true'
+        : true,
+    user:
+      process.env.SMTP_USER ??
+      process.env.EMAIL_USER ??
+      'niyoblaise7@gmail.com',
+    pass:
+      process.env.SMTP_PASS ??
+      process.env.EMAIL_PASS ??
+      process.env.EMAIL_PASSWORD ??
+      'sqsbmeybwyoeewyu',
+    from:
+      process.env.SMTP_FROM ??
+      process.env.EMAIL_FROM ??
+      'Mindora <niyoblaise7@gmail.com>',
+  },
   // Where the browser lands after a successful Google OAuth callback. The
   // frontend route there does no token parsing — it just waits on its own
   // mount-time bootstrap (POST /refresh) to pick up the refreshToken cookie

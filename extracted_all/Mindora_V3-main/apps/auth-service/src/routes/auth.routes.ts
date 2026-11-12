@@ -39,6 +39,10 @@ import {
   storePasswordResetToken,
 } from '../lib/redis.js';
 import {
+  sendPasswordResetEmail,
+  sendPasswordResetSuccessEmail,
+} from '../lib/email.js';
+import {
   clearRefreshCookie,
   issueAuthSession,
   setRefreshCookie,
@@ -271,17 +275,45 @@ authRouter.post(
     const { email } = parsed.data;
     const user = await prisma.user.findUnique({ where: { email } });
 
-    if (user) {
+    if (user && user.isActive) {
       const resetToken = randomBytes(32).toString('base64url');
       const tokenHash = hashToken(resetToken);
       await storePasswordResetToken(tokenHash, user.id);
-      const resetUrl = `${config.appBaseUrl}/reset-password?token=${resetToken}`;
+      const baseUrl = config.frontendUrl || config.appBaseUrl;
+      const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
       console.log(`[password-reset] Reset URL for ${email}: ${resetUrl}`);
+
+      await sendPasswordResetEmail({
+        to: user.email,
+        resetUrl,
+      });
     }
 
     res.status(200).json({
       message: 'If that email exists, a reset link has been sent.',
     });
+  })
+);
+
+authRouter.get(
+  '/reset-password/verify',
+  publicAuthRouteLimiter,
+  asyncHandler(async (req, res) => {
+    const token = req.query.token;
+    if (typeof token !== 'string' || !token) {
+      res.status(400).json({ valid: false, message: 'Reset token is required' });
+      return;
+    }
+
+    const tokenHash = hashToken(token);
+    const userId = await getPasswordResetUserId(tokenHash);
+
+    if (!userId) {
+      res.status(400).json({ valid: false, message: 'Invalid or expired reset token' });
+      return;
+    }
+
+    res.status(200).json({ valid: true });
   })
 );
 
@@ -307,6 +339,12 @@ authRouter.post(
       return;
     }
 
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.isActive) {
+      res.status(400).json({ message: 'Invalid or expired reset token' });
+      return;
+    }
+
     const passwordHash = await hashPassword(newPassword);
     await prisma.user.update({
       where: { id: userId },
@@ -317,6 +355,10 @@ authRouter.post(
     await prisma.refreshToken.updateMany({
       where: { userId, revoked: false },
       data: { revoked: true },
+    });
+
+    await sendPasswordResetSuccessEmail({
+      to: user.email,
     });
 
     res.status(200).json({ message: 'Password updated successfully' });

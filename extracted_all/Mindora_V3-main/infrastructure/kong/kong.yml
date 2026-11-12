@@ -87,6 +87,16 @@ routes:
         config:
           replace:
             uri: /reset-password
+  - name: auth-reset-password-verify
+    service: auth-service
+    paths: [/api/v1/auth/reset-password/verify]
+    strip_path: false
+    methods: [GET, OPTIONS]
+    plugins:
+      - name: request-transformer
+        config:
+          replace:
+            uri: /reset-password/verify
   - name: auth-oauth-google
     service: auth-service
     paths: [/api/v1/auth/oauth/google]

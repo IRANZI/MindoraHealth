@@ -364,9 +364,9 @@ export const openApiSpec = {
         summary: 'Request a password reset link',
         description:
           'Always returns 200 with the same message regardless of whether the email ' +
-          'exists, to avoid leaking which addresses are registered. If the email does ' +
-          'match a user, a reset token is generated and stored in Redis; in this ' +
-          'environment the reset URL is logged to the console rather than emailed.',
+          'exists, to avoid leaking which addresses are registered. If the email matches ' +
+          'an active user, a 15-minute reset token is generated and stored in Redis, and ' +
+          'a password reset email containing the secure link is sent to the user.',
         security: [],
         requestBody: {
           required: true,
@@ -389,6 +389,54 @@ export const openApiSpec = {
             },
           },
           '400': { $ref: '#/components/responses/ValidationError' },
+          '429': { $ref: '#/components/responses/RateLimited' },
+        },
+      },
+    },
+    '/reset-password/verify': {
+      get: {
+        tags: ['Password Reset'],
+        summary: 'Verify validity of a password reset token',
+        description:
+          'Checks whether a given reset token is valid and unexpired without consuming it.',
+        security: [],
+        parameters: [
+          {
+            name: 'token',
+            in: 'query',
+            required: true,
+            description: 'The password reset token to verify',
+            schema: { type: 'string' },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Token is valid',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    valid: { type: 'boolean', example: true },
+                  },
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Token is invalid or expired',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    valid: { type: 'boolean', example: false },
+                    message: { type: 'string', example: 'Invalid or expired reset token' },
+                  },
+                },
+              },
+            },
+          },
           '429': { $ref: '#/components/responses/RateLimited' },
         },
       },

@@ -75,6 +75,15 @@ vi.mock('@mindora/queue', () => ({
   publish: (...args: unknown[]) => mockPublish(...args),
 }));
 
+const mockSendResetEmail = vi.fn().mockResolvedValue(true);
+const mockSendSuccessEmail = vi.fn().mockResolvedValue(true);
+
+vi.mock('../lib/email.js', () => ({
+  sendPasswordResetEmail: (...args: unknown[]) => mockSendResetEmail(...args),
+  sendPasswordResetSuccessEmail: (...args: unknown[]) => mockSendSuccessEmail(...args),
+  verifySmtpConnection: vi.fn().mockResolvedValue({ success: true }),
+}));
+
 vi.mock('../lib/redis.js', () => ({
   connectRedis: vi.fn(),
   storePasswordResetToken: (...args: unknown[]) => mockStoreReset(...args),
@@ -423,8 +432,16 @@ describe('POST /refresh', () => {
 });
 
 describe('POST /forgot-password', () => {
-  it('always returns 200', async () => {
-    mockFindUnique.mockResolvedValue({ id: 'user-123', email: 'a@b.com' });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('generates a token and sends reset email when active user exists', async () => {
+    mockFindUnique.mockResolvedValue({
+      id: 'user-123',
+      email: 'a@b.com',
+      isActive: true,
+    });
     mockStoreReset.mockResolvedValue(undefined);
 
     const app = createApp();
@@ -433,7 +450,178 @@ describe('POST /forgot-password', () => {
       .send({ email: 'a@b.com' });
 
     expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      message: 'If that email exists, a reset link has been sent.',
+    });
     expect(mockStoreReset).toHaveBeenCalled();
+    expect(mockSendResetEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'a@b.com',
+        resetUrl: expect.stringContaining('/reset-password?token='),
+      })
+    );
+  });
+
+  it('still returns 200 without sending email if user does not exist', async () => {
+    mockFindUnique.mockResolvedValue(null);
+
+    const app = createApp();
+    const response = await request(app)
+      .post('/forgot-password')
+      .send({ email: 'nonexistent@example.com' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      message: 'If that email exists, a reset link has been sent.',
+    });
+    expect(mockStoreReset).not.toHaveBeenCalled();
+    expect(mockSendResetEmail).not.toHaveBeenCalled();
+  });
+
+  it('still returns 200 without sending email if user is suspended', async () => {
+    mockFindUnique.mockResolvedValue({
+      id: 'user-123',
+      email: 'suspended@example.com',
+      isActive: false,
+    });
+
+    const app = createApp();
+    const response = await request(app)
+      .post('/forgot-password')
+      .send({ email: 'suspended@example.com' });
+
+    expect(response.status).toBe(200);
+    expect(mockStoreReset).not.toHaveBeenCalled();
+    expect(mockSendResetEmail).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid email with 400', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post('/forgot-password')
+      .send({ email: 'not-an-email' });
+
+    expect(response.status).toBe(400);
+    expect(mockStoreReset).not.toHaveBeenCalled();
+    expect(mockSendResetEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /reset-password/verify', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns valid true when token exists in redis', async () => {
+    mockGetResetUser.mockResolvedValue('user-123');
+
+    const app = createApp();
+    const response = await request(app)
+      .get('/reset-password/verify')
+      .query({ token: 'valid-token-string' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ valid: true });
+    expect(mockGetResetUser).toHaveBeenCalled();
+  });
+
+  it('returns 400 when token is expired or not found', async () => {
+    mockGetResetUser.mockResolvedValue(null);
+
+    const app = createApp();
+    const response = await request(app)
+      .get('/reset-password/verify')
+      .query({ token: 'expired-token' });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      valid: false,
+      message: 'Invalid or expired reset token',
+    });
+  });
+
+  it('returns 400 when token query param is missing', async () => {
+    const app = createApp();
+    const response = await request(app).get('/reset-password/verify');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      valid: false,
+      message: 'Reset token is required',
+    });
+  });
+});
+
+describe('POST /reset-password', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('resets password, revokes sessions, and sends confirmation email', async () => {
+    mockGetResetUser.mockResolvedValue('user-123');
+    mockFindUnique.mockResolvedValue({
+      id: 'user-123',
+      email: 'patient@example.com',
+      isActive: true,
+    });
+    mockUserUpdate.mockResolvedValue({});
+    mockDeleteReset.mockResolvedValue(undefined);
+    mockRefreshUpdateMany.mockResolvedValue({ count: 2 });
+
+    const app = createApp();
+    const response = await request(app)
+      .post('/reset-password')
+      .send({
+        token: 'valid-reset-token',
+        newPassword: 'BrandNewSecurePassword123!',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toBe('Password updated successfully');
+    expect(mockUserUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-123' },
+        data: expect.objectContaining({ passwordHash: expect.any(String) }),
+      })
+    );
+    expect(mockDeleteReset).toHaveBeenCalled();
+    expect(mockRefreshUpdateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-123', revoked: false },
+      data: { revoked: true },
+    });
+    expect(mockSendSuccessEmail).toHaveBeenCalledWith({
+      to: 'patient@example.com',
+    });
+  });
+
+  it('rejects invalid or expired reset token with 400', async () => {
+    mockGetResetUser.mockResolvedValue(null);
+
+    const app = createApp();
+    const response = await request(app)
+      .post('/reset-password')
+      .send({
+        token: 'invalid-or-expired-token',
+        newPassword: 'BrandNewSecurePassword123!',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Invalid or expired reset token');
+    expect(mockUserUpdate).not.toHaveBeenCalled();
+    expect(mockDeleteReset).not.toHaveBeenCalled();
+  });
+
+  it('rejects short passwords (< 8 characters) with 400', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post('/reset-password')
+      .send({
+        token: 'some-token',
+        newPassword: 'short',
+      });
+
+    expect(response.status).toBe(400);
+    expect(mockUserUpdate).not.toHaveBeenCalled();
   });
 });
 
