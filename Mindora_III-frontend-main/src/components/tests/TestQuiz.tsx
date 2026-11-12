@@ -7,11 +7,19 @@ import { ArrowLeft } from "lucide-react";
 import { MindoraLogo } from "@/components/brand/MindoraLogo";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { useAuth } from "@/contexts/AuthContext";
 import { getTestById, testResultStorageKey, type TestDefinition } from "@/lib/mock-data/tests";
 import { cn } from "@/lib/utils";
 
-export function TestQuiz({ test }: { test: TestDefinition }) {
+export function TestQuiz({
+  test,
+  basePath = "/tests",
+}: {
+  test: TestDefinition;
+  basePath?: "/tests" | "/screenings";
+}) {
   const router = useRouter();
+  const { user } = useAuth();
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [error, setError] = useState("");
@@ -31,8 +39,11 @@ export function TestQuiz({ test }: { test: TestDefinition }) {
     }
     setError("");
     if (isLast) {
-      window.sessionStorage.setItem(testResultStorageKey(test.id), JSON.stringify(answers));
-      router.push(`/tests/${test.id}/result`);
+      window.sessionStorage.setItem(
+        testResultStorageKey(test.id, basePath === "/screenings" ? user?.userId : undefined),
+        JSON.stringify(answers)
+      );
+      router.push(`${basePath}/${test.id}/result`);
       return;
     }
     setIndex((value) => value + 1);
@@ -43,7 +54,7 @@ export function TestQuiz({ test }: { test: TestDefinition }) {
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={() => (index === 0 ? router.push("/tests") : setIndex((value) => value - 1))}
+          onClick={() => (index === 0 ? router.push(basePath) : setIndex((value) => value - 1))}
           className="rounded-full p-2 text-[#1A1A1A] hover:bg-[#F9F6FF]"
           aria-label="Back"
         >
@@ -99,7 +110,7 @@ export function TestQuiz({ test }: { test: TestDefinition }) {
         <Button
           type="button"
           variant="ghost"
-          onClick={() => (index === 0 ? router.push("/tests") : setIndex((value) => value - 1))}
+          onClick={() => (index === 0 ? router.push(basePath) : setIndex((value) => value - 1))}
         >
           Back
         </Button>
@@ -111,17 +122,23 @@ export function TestQuiz({ test }: { test: TestDefinition }) {
   );
 }
 
-export function TestQuizGate({ id }: { id: string }) {
+export function TestQuizGate({
+  id,
+  basePath = "/tests",
+}: {
+  id: string;
+  basePath?: "/tests" | "/screenings";
+}) {
   const test = getTestById(id);
   if (!test) {
     return (
       <div className="px-4 py-16 text-center">
         <p className="font-semibold">This test could not be found.</p>
         <Button asChild className="mt-4" size="sm">
-          <Link href="/tests">Back to tests</Link>
+          <Link href={basePath}>Back to tests</Link>
         </Button>
       </div>
     );
   }
-  return <TestQuiz test={test} />;
+  return <TestQuiz test={test} basePath={basePath} />;
 }

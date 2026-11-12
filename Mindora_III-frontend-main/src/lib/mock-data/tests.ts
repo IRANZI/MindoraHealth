@@ -362,6 +362,6 @@ export function scoreTest(test: TestDefinition, answers: Record<number, number>)
   };
 }
 
-export function testResultStorageKey(id: string) {
-  return `mindora-test-result-${id}`;
+export function testResultStorageKey(id: string, userId?: string) {
+  return userId ? `mindora-test-result-${userId}-${id}` : `mindora-test-result-${id}`;
 }

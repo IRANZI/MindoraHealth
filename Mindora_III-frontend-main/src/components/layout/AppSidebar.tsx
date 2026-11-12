@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Briefcase,
   Calendar,
+  ClipboardList,
   Heart,
   Home,
   LogOut,
@@ -30,6 +31,7 @@ function initialsFor(name: string): string {
 const navItems = [
   { href: "/today", label: "Today", icon: Home },
   { href: "/check-in", label: "Check-in", icon: Heart },
+  { href: "/screenings", label: "Screening tests", icon: ClipboardList },
   { href: "/therapy", label: "Therapy", icon: Calendar },
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/reflect", label: "Reflect", icon: PenLine },
@@ -72,7 +74,7 @@ export function AppSidebar() {
         </p>
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const showDue = item.href === "/check-in" && checkInDue;
           return (
             <Link

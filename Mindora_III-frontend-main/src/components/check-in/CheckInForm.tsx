@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarPlus } from "lucide-react";
+import Link from "next/link";
+import { CalendarPlus, ClipboardList } from "lucide-react";
 import {
   MoodEntryFields,
   DEFAULT_MOOD_FIELDS,
@@ -144,15 +145,24 @@ export function CheckInForm() {
               )}
             </div>
             {!editingEntry && (
-              <button
-                type="button"
-                onClick={() => setBackfillOpen(true)}
-                disabled={atDailyLimit}
-                className="flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold text-mindora-purple-dark shadow-[5px_5px_12px_#cdc6e0,-5px_-5px_12px_#fdfbff] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-              >
-                <CalendarPlus className="h-3.5 w-3.5" />
-                Log a missed day
-              </button>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/screenings"
+                  className="flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold text-mindora-purple-dark shadow-[5px_5px_12px_#cdc6e0,-5px_-5px_12px_#fdfbff] hover:text-mindora-purple"
+                >
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  Screening tests
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setBackfillOpen(true)}
+                  disabled={atDailyLimit}
+                  className="flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold text-mindora-purple-dark shadow-[5px_5px_12px_#cdc6e0,-5px_-5px_12px_#fdfbff] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                >
+                  <CalendarPlus className="h-3.5 w-3.5" />
+                  Log a missed day
+                </button>
+              </div>
             )}
           </div>
 

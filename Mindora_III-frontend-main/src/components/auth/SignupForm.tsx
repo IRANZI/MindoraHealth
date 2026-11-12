@@ -63,6 +63,8 @@ export function SignupForm() {
       const user = await registerAccount({
         email: data.email,
         password: data.password,
+        // The public auth API intentionally creates PATIENT accounts only.
+        // Therapist applicants proceed through the review workflow after signup.
         role: "PATIENT",
         userName: data.name,
       });

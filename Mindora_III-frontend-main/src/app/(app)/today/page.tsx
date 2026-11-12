@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Flame } from "lucide-react";
+import { ArrowRight, ClipboardList, Flame } from "lucide-react";
 import { HomeHeroPortrait } from "@/components/home/HomeSections";
 import { WeeklyMoodCard } from "@/components/home/WeeklyMoodCard";
 import { NextSessionCard } from "@/components/home/NextSessionCard";
@@ -159,6 +159,27 @@ export default function TodayPage() {
           isLoading={appointmentsLoading}
           isError={appointmentsErrored}
         />
+      </section>
+
+      <section className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-[26px] bg-white p-6 shadow-[8px_8px_18px_#cbc4de,-8px_-8px_18px_#fdfbff]">
+        <div className="flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-mindora-purple-pale text-mindora-purple">
+            <ClipboardList className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="font-bold text-foreground">Want a little more insight?</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Take a validated screening questionnaire as part of your check-in.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/screenings"
+          className="flex h-11 items-center gap-2 rounded-full bg-mindora-purple px-5 text-sm font-bold text-white hover:bg-mindora-purple-dark"
+        >
+          Explore screenings
+          <ArrowRight className="h-4 w-4" />
+        </Link>
       </section>
     </div>
   );

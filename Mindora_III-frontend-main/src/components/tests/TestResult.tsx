@@ -2,7 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { getTestById, scoreTest, testResultStorageKey } from "@/lib/mock-data/tests";
+import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BackLink } from "@/components/public/BackLink";
@@ -24,15 +26,22 @@ function subscribe() {
   return () => undefined;
 }
 
-function readResult(id: string) {
-  return window.sessionStorage.getItem(testResultStorageKey(id));
-}
-
-export function TestResultView({ id }: { id: string }) {
+export function TestResultView({
+  id,
+  basePath = "/tests",
+}: {
+  id: string;
+  basePath?: "/tests" | "/screenings";
+}) {
   const test = getTestById(id);
+  const { user } = useAuth();
+  const storageKey = testResultStorageKey(
+    id,
+    basePath === "/screenings" ? user?.userId : undefined
+  );
   const raw = useSyncExternalStore(
     subscribe,
-    () => (test ? readResult(id) : null),
+    () => (test ? window.sessionStorage.getItem(storageKey) : null),
     () => null
   );
 
@@ -41,7 +50,7 @@ export function TestResultView({ id }: { id: string }) {
       <div className="px-4 py-16 text-center">
         <p className="font-semibold">This test could not be found.</p>
         <Button asChild className="mt-4" size="sm">
-          <Link href="/tests">Back to tests</Link>
+          <Link href={basePath}>Back to tests</Link>
         </Button>
       </div>
     );
@@ -55,7 +64,7 @@ export function TestResultView({ id }: { id: string }) {
           Please take the test first to see your result.
         </p>
         <Button asChild className="mt-4">
-          <Link href={`/tests/${id}`}>Take test</Link>
+          <Link href={`${basePath}/${id}`}>Take test</Link>
         </Button>
       </div>
     );
@@ -70,7 +79,7 @@ export function TestResultView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
-      <BackLink fallback="/tests" className="mb-2" />
+      <BackLink fallback={basePath} className="mb-2" />
       <h1 className="mt-4 text-3xl font-bold tracking-tight">{test.name}</h1>
       <p className="mt-6 text-4xl font-bold text-[#1A1A1A]">{scoreLabel}</p>
       <Badge className={`mt-4 ${severityColor[result.severity] ?? "bg-mindora-purple text-white"}`}>
@@ -83,6 +92,27 @@ export function TestResultView({ id }: { id: string }) {
         </p>
       ))}
       <p className="mt-4 leading-relaxed text-[#6B7280]">{result.interpretation}</p>
+
+      {result.severity === "Extremely Severe" && (
+        <section
+          role="alert"
+          className="mt-6 rounded-xl border border-red-300 bg-red-50 p-5 text-red-950"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
+            <div>
+              <h2 className="font-bold">You don&apos;t have to face this alone.</h2>
+              <p className="mt-1 text-sm leading-relaxed">
+                Your answers suggest very high distress. If you feel in immediate danger, contact
+                emergency services or call Mindora&apos;s 24/7 crisis line now.
+              </p>
+              <Button asChild className="mt-4 bg-red-700 hover:bg-red-800">
+                <a href="tel:0783974066">Call 0 783 974 066</a>
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="mt-8 rounded-xl border border-amber-200 bg-[#FFFBEB] p-4 text-sm leading-relaxed text-amber-900">
         This is a self-report screening tool and not a diagnostic instrument. It should not replace

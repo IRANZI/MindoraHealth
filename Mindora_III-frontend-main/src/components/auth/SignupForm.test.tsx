@@ -12,8 +12,10 @@ global.ResizeObserver = class {
   disconnect() {}
 };
 
+const mockPush = jest.fn();
+
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -68,5 +70,24 @@ describe("SignupForm", () => {
         userName: "Theodora",
       })
     );
+  });
+
+  it("creates a client account without showing role selection on signup", async () => {
+    register.mockResolvedValueOnce({ role: "PATIENT" });
+    const user = userEvent.setup();
+    render(<SignupForm />);
+
+    expect(screen.queryByText("I am joining as")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /therapist/i })).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText(/what should we call you/i), "Theodora");
+    await user.type(screen.getByLabelText("Email"), "theodora@example.com");
+    await user.type(screen.getByLabelText("Password"), "a-valid-password");
+    await user.click(screen.getByRole("checkbox", { name: /i agree to mindora/i }));
+    await user.click(screen.getByRole("button", { name: /create my space/i }));
+
+    expect(register).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "PATIENT", userName: "Theodora" })
+    );
+    expect(mockPush).toHaveBeenCalledWith("/today");
   });
 });

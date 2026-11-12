@@ -17,6 +17,9 @@ import { safeReturnUrl } from "@/lib/booking";
 import { BackLink } from "@/components/public/BackLink";
 import { ApiError, getGoogleOAuthUrl } from "@/lib/api";
 import { dashboardPathForRole } from "@/lib/roles";
+import type { UserRole } from "@/types/domain";
+
+type LoginRole = Extract<UserRole, "PATIENT" | "THERAPIST">;
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -29,8 +32,9 @@ type LoginForm = z.infer<typeof loginSchema>;
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const [apiError, setApiError] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<LoginRole>("PATIENT");
   const returnUrl = searchParams.get("returnUrl");
 
   const {
@@ -55,6 +59,14 @@ export function LoginForm() {
     setApiError(null);
     try {
       const user = await login(data.email, data.password);
+      if (user.role !== "ADMIN" && user.role !== selectedRole) {
+        await logout();
+        const roleName = selectedRole === "PATIENT" ? "Client" : "Therapist";
+        setApiError(
+          `This account is not registered as a ${roleName}. Choose the correct sign-in role.`
+        );
+        return;
+      }
       router.push(returnUrl ? safeReturnUrl(returnUrl) : dashboardPathForRole(user.role));
     } catch (err) {
       setApiError(
@@ -77,6 +89,35 @@ export function LoginForm() {
         <p className="mt-2 text-muted-foreground">Sign in to continue your gentle practice.</p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Sign in as</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["PATIENT", "Client"],
+                  ["THERAPIST", "Therapist"],
+                ] as const
+              ).map(([role, label]) => (
+                <button
+                  key={role}
+                  type="button"
+                  aria-pressed={selectedRole === role}
+                  onClick={() => {
+                    setSelectedRole(role);
+                    setApiError(null);
+                  }}
+                  className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
+                    selectedRole === role
+                      ? "border-mindora-purple bg-mindora-purple-pale text-mindora-purple"
+                      : "border-border bg-white text-foreground hover:border-mindora-purple/50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
               Email
@@ -95,7 +136,10 @@ export function LoginForm() {
               <label htmlFor="password" className="text-sm font-medium">
                 Password
               </label>
-              <Link href="#" className="text-xs font-medium text-mindora-purple hover:underline">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-medium text-mindora-purple hover:underline"
+              >
                 Forgot?
               </Link>
             </div>
@@ -114,7 +158,11 @@ export function LoginForm() {
             </label>
           </div>
 
-          {apiError && <p className="text-xs text-red-500">{apiError}</p>}
+          {apiError && (
+            <p role="alert" className="text-xs text-red-500">
+              {apiError}
+            </p>
+          )}
 
           <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
             {isSubmitting ? "Signing in..." : "Sign in"}
