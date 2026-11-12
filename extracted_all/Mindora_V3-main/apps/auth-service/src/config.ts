@@ -34,19 +34,16 @@ export const config = {
       process.env.SMTP_SECURE !== undefined
         ? process.env.SMTP_SECURE === 'true'
         : true,
-    user:
-      process.env.SMTP_USER ??
-      process.env.EMAIL_USER ??
-      'niyoblaise7@gmail.com',
+    user: process.env.SMTP_USER ?? process.env.EMAIL_USER ?? '',
     pass:
       process.env.SMTP_PASS ??
       process.env.EMAIL_PASS ??
       process.env.EMAIL_PASSWORD ??
-      'sqsbmeybwyoeewyu',
+      '',
     from:
       process.env.SMTP_FROM ??
       process.env.EMAIL_FROM ??
-      'Mindora <niyoblaise7@gmail.com>',
+      'Mindora <info@mindora.rw>',
   },
   // Where the browser lands after a successful Google OAuth callback. The
   // frontend route there does no token parsing — it just waits on its own
