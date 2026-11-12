@@ -2,17 +2,17 @@
   "name": "mindora_v3",
   "version": "1.0.0",
   "private": true,
-  "description": "Mindora V3 monorepo — mental health platform microservices",
+  "description": "Mindora V3 monorepo \u2014 mental health platform microservices",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev --concurrency=15",
-    "dev:messaging": "turbo run dev --filter=@mindora/messaging-service --filter=@mindora/auth-service",
-    "dev:community": "turbo run dev --filter=@mindora/community-service --filter=@mindora/auth-service",
-    "dev:auth": "turbo run dev --filter=@mindora/auth-service",
+    "build": "node init && turbo run build",
+    "dev": "node init && turbo run dev --concurrency=15",
+    "dev:messaging": "node init && turbo run dev --filter=@mindora/messaging-service --filter=@mindora/auth-service",
+    "dev:community": "node init && turbo run dev --filter=@mindora/community-service --filter=@mindora/auth-service",
+    "dev:auth": "node init && turbo run dev --filter=@mindora/auth-service",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,js,json,md,yml,yaml}\"",

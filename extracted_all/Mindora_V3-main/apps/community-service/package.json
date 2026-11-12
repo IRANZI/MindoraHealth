@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "seed": "tsx src/seed.ts",
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
+    "dev": "node init && tsx watch src/index.ts",
+    "build": "node init && tsc",
+    "start": "node init && node dist/index.js",
     "lint": "eslint src/",
     "test": "vitest run --passWithNoTests",
     "export-spec": "tsx -e \"import('./src/docs/swagger.ts').then(m => require('fs').writeFileSync('../../docs/community-service.json', JSON.stringify(m.swaggerSpec, null, 2)))\""
