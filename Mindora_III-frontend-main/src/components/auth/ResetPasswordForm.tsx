@@ -46,7 +46,9 @@ export function ResetPasswordForm({ token }: { token: string }) {
       setApiError(
         error instanceof ApiError
           ? error.message
-          : "Could not reset your password. Request a new reset link and try again."
+          : error instanceof Error
+            ? error.message
+            : "Could not reset your password. Request a new reset link and try again."
       );
     }
   };
@@ -108,9 +110,17 @@ export function ResetPasswordForm({ token }: { token: string }) {
         </div>
 
         {apiError && (
-          <p role="alert" className="text-sm text-red-600">
-            {apiError}
-          </p>
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          >
+            <p>{apiError}</p>
+            {apiError.toLowerCase().includes("expired") && (
+              <Button asChild variant="outline" size="sm" className="mt-3 w-full border-red-300 text-red-800 hover:bg-red-100">
+                <Link href="/forgot-password">Request a new reset link</Link>
+              </Button>
+            )}
+          </div>
         )}
 
         <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>

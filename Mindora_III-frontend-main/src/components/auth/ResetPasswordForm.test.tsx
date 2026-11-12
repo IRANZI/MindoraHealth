@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import { resetPassword } from "@/lib/auth-api";
+import { ApiError } from "@/lib/api";
 
 jest.mock("@/lib/auth-api", () => ({
   resetPassword: jest.fn(),
@@ -38,5 +39,24 @@ describe("ResetPasswordForm", () => {
 
     expect(await screen.findByText("Passwords do not match")).toBeInTheDocument();
     expect(mockedResetPassword).not.toHaveBeenCalled();
+  });
+
+  it("displays error alert when reset request fails with expired or invalid token", async () => {
+    mockedResetPassword.mockRejectedValueOnce(
+      new ApiError("Invalid or expired reset token", 400)
+    );
+    const user = userEvent.setup();
+    render(<ResetPasswordForm token="expired-token" />);
+
+    await user.type(screen.getByLabelText("New password"), "another-valid-password");
+    await user.type(screen.getByLabelText("Confirm new password"), "another-valid-password");
+    await user.click(screen.getByRole("button", { name: "Save new password" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Invalid or expired reset token"
+    );
+    expect(
+      screen.getByRole("link", { name: "Request a new reset link" })
+    ).toHaveAttribute("href", "/forgot-password");
   });
 });
