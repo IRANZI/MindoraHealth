@@ -283,9 +283,11 @@ authRouter.post(
       const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
       console.log(`[password-reset] Reset URL for ${email}: ${resetUrl}`);
 
-      await sendPasswordResetEmail({
+      void sendPasswordResetEmail({
         to: user.email,
         resetUrl,
+      }).catch((err) => {
+        console.error(`[email] Background send failed for ${user.email}:`, err);
       });
     }
 
@@ -346,19 +348,26 @@ authRouter.post(
     }
 
     const passwordHash = await hashPassword(newPassword);
-    await prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash },
-    });
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      }),
+      prisma.refreshToken.updateMany({
+        where: { userId, revoked: false },
+        data: { revoked: true },
+      }),
+    ]);
 
     await deletePasswordResetToken(tokenHash);
-    await prisma.refreshToken.updateMany({
-      where: { userId, revoked: false },
-      data: { revoked: true },
-    });
 
-    await sendPasswordResetSuccessEmail({
+    void sendPasswordResetSuccessEmail({
       to: user.email,
+    }).catch((err) => {
+      console.error(
+        `[email] Background confirmation email failed for ${user.email}:`,
+        err
+      );
     });
 
     res.status(200).json({ message: 'Password updated successfully' });

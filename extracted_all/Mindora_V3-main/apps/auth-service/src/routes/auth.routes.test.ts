@@ -49,6 +49,9 @@ vi.mock('../lib/prisma.js', () => ({
       count: (...args: unknown[]) => mockUserCount(...args),
       groupBy: (...args: unknown[]) => mockUserGroupBy(...args),
     },
+    $transaction: vi.fn(async (ops: unknown[]) =>
+      Promise.all(Array.isArray(ops) ? ops : [])
+    ),
     $queryRaw: (...args: unknown[]) => mockQueryRaw(...args),
     refreshToken: {
       findFirst: (...args: unknown[]) => mockFindFirst(...args),
