@@ -32,6 +32,11 @@ export function requestPasswordReset(email: string): Promise<{ message: string }
   });
 }
 
+// GET /api/v1/auth/reset-password/verify
+export function verifyResetToken(token: string): Promise<{ valid: boolean; message?: string }> {
+  return apiFetch(`/api/v1/auth/reset-password/verify?token=${encodeURIComponent(token)}`);
+}
+
 // POST /api/v1/auth/reset-password
 export function resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
   return apiFetch("/api/v1/auth/reset-password", {
