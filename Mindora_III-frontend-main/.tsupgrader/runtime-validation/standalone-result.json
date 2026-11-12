@@ -96,10 +96,7 @@
       {
         "source": "setup[0]",
         "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
-        "args": [
-          "install",
-          "--no-package-lock"
-        ],
+        "args": ["install", "--no-package-lock"],
         "cwd": "C:\\Users\\user\\Desktop\\Mindora\\Mindora_III-frontend-main",
         "env": {},
         "prependPath": [],
@@ -108,10 +105,7 @@
       {
         "source": "type-check",
         "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
-        "args": [
-          "run",
-          "type-check"
-        ],
+        "args": ["run", "type-check"],
         "cwd": "C:\\Users\\user\\Desktop\\Mindora\\Mindora_III-frontend-main",
         "env": {},
         "prependPath": [],
@@ -120,10 +114,7 @@
       {
         "source": "production-build",
         "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
-        "args": [
-          "run",
-          "build"
-        ],
+        "args": ["run", "build"],
         "cwd": "C:\\Users\\user\\Desktop\\Mindora\\Mindora_III-frontend-main",
         "env": {},
         "prependPath": [],
@@ -132,11 +123,7 @@
       {
         "source": "tests-pass",
         "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
-        "args": [
-          "test",
-          "--",
-          "--runInBand"
-        ],
+        "args": ["test", "--", "--runInBand"],
         "cwd": "C:\\Users\\user\\Desktop\\Mindora\\Mindora_III-frontend-main",
         "env": {},
         "prependPath": [],
@@ -145,10 +132,7 @@
       {
         "source": "sign-in-page",
         "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
-        "args": [
-          "run",
-          "start"
-        ],
+        "args": ["run", "start"],
         "cwd": "C:\\Users\\user\\Desktop\\Mindora\\Mindora_III-frontend-main",
         "env": {},
         "prependPath": [],
@@ -157,10 +141,7 @@
       {
         "source": "sign-up-page",
         "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
-        "args": [
-          "run",
-          "start"
-        ],
+        "args": ["run", "start"],
         "cwd": "C:\\Users\\user\\Desktop\\Mindora\\Mindora_III-frontend-main",
         "env": {},
         "prependPath": [],
@@ -169,10 +150,7 @@
       {
         "source": "admin-dashboard-page",
         "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
-        "args": [
-          "run",
-          "start"
-        ],
+        "args": ["run", "start"],
         "cwd": "C:\\Users\\user\\Desktop\\Mindora\\Mindora_III-frontend-main",
         "env": {},
         "prependPath": [],
