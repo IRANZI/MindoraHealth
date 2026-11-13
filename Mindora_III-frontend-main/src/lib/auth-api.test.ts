@@ -1,9 +1,5 @@
 import { apiFetch } from "@/lib/api";
-import {
-  requestPasswordReset,
-  verifyResetToken,
-  resetPassword,
-} from "@/lib/auth-api";
+import { requestPasswordReset, verifyResetToken, resetPassword } from "@/lib/auth-api";
 
 jest.mock("@/lib/api", () => ({
   apiFetch: jest.fn(),
@@ -24,13 +20,10 @@ describe("auth-api password reset helpers", () => {
 
       const response = await requestPasswordReset("user@example.com");
 
-      expect(mockedApiFetch).toHaveBeenCalledWith(
-        "/api/v1/auth/forgot-password",
-        {
-          method: "POST",
-          body: JSON.stringify({ email: "user@example.com" }),
-        }
-      );
+      expect(mockedApiFetch).toHaveBeenCalledWith("/api/v1/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email: "user@example.com" }),
+      });
       expect(response).toEqual({
         message: "If that email exists, a reset link has been sent.",
       });
@@ -58,16 +51,13 @@ describe("auth-api password reset helpers", () => {
 
       const response = await resetPassword("secure-token", "NewSecretPassword123!");
 
-      expect(mockedApiFetch).toHaveBeenCalledWith(
-        "/api/v1/auth/reset-password",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            token: "secure-token",
-            newPassword: "NewSecretPassword123!",
-          }),
-        }
-      );
+      expect(mockedApiFetch).toHaveBeenCalledWith("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({
+          token: "secure-token",
+          newPassword: "NewSecretPassword123!",
+        }),
+      });
       expect(response).toEqual({
         message: "Password updated successfully",
       });

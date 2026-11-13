@@ -116,7 +116,12 @@ export function ResetPasswordForm({ token }: { token: string }) {
           >
             <p>{apiError}</p>
             {apiError.toLowerCase().includes("expired") && (
-              <Button asChild variant="outline" size="sm" className="mt-3 w-full border-red-300 text-red-800 hover:bg-red-100">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full border-red-300 text-red-800 hover:bg-red-100"
+              >
                 <Link href="/forgot-password">Request a new reset link</Link>
               </Button>
             )}

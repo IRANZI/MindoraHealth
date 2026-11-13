@@ -42,9 +42,7 @@ describe("ResetPasswordForm", () => {
   });
 
   it("displays error alert when reset request fails with expired or invalid token", async () => {
-    mockedResetPassword.mockRejectedValueOnce(
-      new ApiError("Invalid or expired reset token", 400)
-    );
+    mockedResetPassword.mockRejectedValueOnce(new ApiError("Invalid or expired reset token", 400));
     const user = userEvent.setup();
     render(<ResetPasswordForm token="expired-token" />);
 
@@ -52,11 +50,10 @@ describe("ResetPasswordForm", () => {
     await user.type(screen.getByLabelText("Confirm new password"), "another-valid-password");
     await user.click(screen.getByRole("button", { name: "Save new password" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Invalid or expired reset token"
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid or expired reset token");
+    expect(screen.getByRole("link", { name: "Request a new reset link" })).toHaveAttribute(
+      "href",
+      "/forgot-password"
     );
-    expect(
-      screen.getByRole("link", { name: "Request a new reset link" })
-    ).toHaveAttribute("href", "/forgot-password");
   });
 });
