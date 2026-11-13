@@ -64,4 +64,3 @@ describe("auth-api password reset helpers", () => {
     });
   });
 });
-

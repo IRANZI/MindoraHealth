@@ -4,8 +4,6 @@ node_modules/
 .pnp.js
 
 # Environment files
-.env
-.env.local
 .env.*.local
 !.env.example
 
@@ -26,3 +24,5 @@ yarn-error.log*
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
+
+config.bat
