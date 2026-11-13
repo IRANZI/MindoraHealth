@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/shared-types" },
+    { "path": "./packages/validation" },
+    { "path": "./packages/queue" },
+    { "path": "./packages/auth-middleware" },
+    { "path": "./packages/events" },
+    { "path": "./packages/http-client" }
+  ],
+  "compilerOptions": {
+    "types": ["node"]
+  }
+}

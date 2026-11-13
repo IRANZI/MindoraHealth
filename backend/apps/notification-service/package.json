@@ -1,0 +1,41 @@
+{
+  "name": "@mindora/notification-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "test": "vitest run --passWithNoTests",
+    "generate": "prisma generate",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@mindora/auth-middleware": "1.0.0",
+    "@mindora/events": "*",
+    "@mindora/queue": "*",
+    "@prisma/client": "^6.19.3",
+    "africastalking": "^0.8.0",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.1",
+    "firebase-admin": "^14.5.0",
+    "helmet": "^8.3.0",
+    "resend": "^6.29.0",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/africastalking": "^0.8.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
+    "prisma": "^6.19.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.8"
+  }
+}
