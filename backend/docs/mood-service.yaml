@@ -1,0 +1,346 @@
+openapi: 3.0.3
+info:
+  title: Mindora Mood Tracking Service API
+  description: |
+    Mood logging, TimescaleDB weekly insights, and therapist reports (Sprint 4).
+
+    - **Runtime:** Node.js 24
+    - **Port:** 3004 (direct) · **8000** via Kong (`/api/v1/mood/*`)
+    - **Database:** PostgreSQL + TimescaleDB hypertable on `mood_entries.recorded_at`
+    - **Events:** `mood.concern`, `mood.streak` on exchange `mindora.mood`
+
+    **Frontend integration:** OpenAPI spec at `GET /openapi.json` or `GET /openapi.yaml` (CORS enabled).
+    Interactive docs at `GET /docs`. Kong base: `http://localhost:8000/api/v1/mood`.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3004
+  - url: http://localhost:8000/api/v1/mood
+  - url: https://api.mindora.rw/api/v1/mood
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: OK
+
+  /log:
+    post:
+      summary: Log a mood entry
+      description: |
+        Patient only. Journal note encrypted (AES-256-GCM). Max 10 logs/day (429).
+        Publishes `mood.concern` if 3+ of last 5 scores are <= 3.
+        Publishes `mood.streak` at 7/14/30 day milestones.
+
+        Omit `recordedAt` to record "now" (the normal check-in). Supply it to
+        backfill a missed day — must not be in the future (5 min clock-skew
+        tolerance) and no more than 365 days ago. The 10/day cap counts writes
+        made *today* regardless of the day being recorded for, so backfilling a
+        batch still draws down the same allowance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogMoodRequest'
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a patient
+        '429':
+          description: Daily limit exceeded
+
+  /history:
+    get:
+      summary: Paginated mood history
+      description: Patient only — returns the authenticated patient's own entries.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+        - name: startDate
+          in: query
+          schema: { type: string, format: date-time }
+        - name: endDate
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: History list
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a patient
+
+  /insights:
+    get:
+      summary: Weekly trend insights (TimescaleDB time_bucket)
+      description: |
+        Patient only. Buckets the last 3 months of entries into 7-day windows via
+        TimescaleDB's `time_bucket()` SQL function, averaging mood/sleep/stress/energy
+        per bucket and comparing the two most recent buckets to derive a trend
+        direction (improving/declining/stable). Cached in Redis `mood:{userId}:weekly`
+        for 1 hour.
+      responses:
+        '200':
+          description: Weekly buckets + trend direction
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a patient
+
+  /report/{userId}:
+    get:
+      summary: Therapist patient mood summary
+      description: Does not expose raw journal notes.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Summary
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a therapist
+        '404':
+          description: No mood data for this patient in the last 30 days
+
+  /streak:
+    get:
+      summary: Current check-in streak
+      description: Patient only.
+      responses:
+        '200':
+          description: Streak count
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a patient
+
+  /today:
+    get:
+      summary: Has the user already checked in today?
+      description: |
+        Patient only. Backs the check-in screen's "already logged today" state.
+
+        `timezone` matters: "today" is only answerable in the user's own zone.
+        A Kigali user (UTC+3) checking in at 01:00 local is still on the
+        previous UTC day, so the UTC default would give the wrong answer for
+        the first three hours of every day. Send
+        `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+
+        `entry` is the most recent entry within the local day (null if none).
+      parameters:
+        - name: timezone
+          in: query
+          description: IANA time zone name. Defaults to UTC.
+          schema: { type: string, default: UTC, example: Africa/Kigali }
+      responses:
+        '200':
+          description: Check-in status for the caller's local day
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayResponse'
+        '400':
+          description: Unknown IANA time zone
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a patient
+
+  /summary:
+    get:
+      summary: Bucketed mood aggregates over a date range (dashboard chart)
+      description: |
+        Patient only. Distinct from `/history` (raw paginated rows) and
+        `/insights` (fixed 3-month weekly window, Redis-cached): this takes an
+        arbitrary range and granularity, and is not cached.
+
+        Defaults to the last 30 days at daily granularity. `avgMood` is
+        weighted by each bucket's entry count, so it equals a plain average
+        over the underlying entries rather than an average of averages.
+      parameters:
+        - name: startDate
+          in: query
+          schema: { type: string, format: date-time }
+        - name: endDate
+          in: query
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+            default: day
+      responses:
+        '200':
+          description: Bucketed aggregates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummaryResponse'
+        '400':
+          description: Validation error (e.g. startDate after endDate)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a patient
+
+  /{id}:
+    put:
+      summary: Edit a mood entry
+      description: |
+        Patient only, and only the caller's own entries.
+
+        **`recordedAt` cannot be changed.** `mood_entries` is a TimescaleDB
+        hypertable partitioned on `recorded_at`, and Timescale rejects an
+        UPDATE that would move a row into a different chunk. To correct the
+        date, DELETE the entry and POST a new one with the right `recordedAt`.
+
+        Omitted fields are left untouched. `journalNote: null` clears an
+        existing note. Editing re-runs the `mood.concern` check, since revising
+        a score downward is the same safety signal as logging it low initially.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMoodRequest'
+      responses:
+        '200':
+          description: The updated entry
+        '400':
+          description: Validation error, or no fields supplied
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a patient
+        '404':
+          description: |
+            No such entry, or it belongs to another user — deliberately not
+            distinguished, so entry existence isn't leaked. Also returned for a
+            malformed (non-UUID) id.
+    delete:
+      summary: Delete a mood entry
+      description: Patient only, and only the caller's own entries.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a patient
+        '404':
+          description: No such entry, or it belongs to another user
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    LogMoodRequest:
+      type: object
+      required: [moodScore]
+      properties:
+        moodScore: { type: integer, minimum: 1, maximum: 10 }
+        emotions: { type: array, items: { type: string } }
+        sleepHours: { type: number }
+        stressLevel: { type: integer }
+        energyLevel: { type: integer }
+        journalNote: { type: string }
+        triggers: { type: array, items: { type: string } }
+        recordedAt:
+          type: string
+          format: date-time
+          description: |
+            Optional. Defaults to now. Must not be in the future, nor more than
+            365 days ago. Use to backfill a missed day.
+
+    UpdateMoodRequest:
+      type: object
+      description: |
+        At least one field required. Omitted fields are left unchanged.
+        Nullable fields accept null to clear them. `recordedAt` is deliberately
+        absent — see the endpoint description.
+      minProperties: 1
+      properties:
+        moodScore: { type: integer, minimum: 1, maximum: 10 }
+        emotions: { type: array, items: { type: string } }
+        sleepHours: { type: number, nullable: true }
+        stressLevel: { type: integer, nullable: true }
+        energyLevel: { type: integer, nullable: true }
+        journalNote: { type: string, nullable: true }
+        triggers: { type: array, items: { type: string } }
+
+    TodayResponse:
+      type: object
+      properties:
+        hasCheckedIn: { type: boolean }
+        localDate:
+          type: string
+          example: '2026-08-07'
+          description: The caller's local calendar date this answer refers to.
+        timezone: { type: string, example: Africa/Kigali }
+        entriesToday: { type: integer }
+        remainingToday:
+          type: integer
+          description: Logs left before the daily cap returns 429.
+        entry:
+          nullable: true
+          description: Most recent entry within the local day, or null.
+          type: object
+
+    SummaryResponse:
+      type: object
+      properties:
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time }
+        granularity: { type: string, enum: [day, week, month] }
+        totalEntries: { type: integer }
+        avgMood:
+          type: number
+          nullable: true
+          description: Entry-count-weighted mean across the range.
+        buckets:
+          type: array
+          items:
+            type: object
+            properties:
+              bucketStart: { type: string, format: date-time }
+              avgMood: { type: number, nullable: true }
+              avgSleep: { type: number, nullable: true }
+              avgStress: { type: number, nullable: true }
+              avgEnergy: { type: number, nullable: true }
+              minMood: { type: integer, nullable: true }
+              maxMood: { type: integer, nullable: true }
+              entryCount: { type: integer }
+
+security:
+  - bearerAuth: []

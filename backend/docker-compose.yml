@@ -1,0 +1,519 @@
+# ============================================================
+# LOCAL DEVELOPMENT ONLY
+# This docker-compose.yml is strictly for local development.
+# It is NOT used in staging or production environments.
+# Several settings here (trust auth, exposed ports, default
+# credentials) are intentionally permissive for developer
+# convenience and would be serious security risks in production.
+# ============================================================
+
+# Shared defaults for every app service below. Values follow the same
+# ${VAR:-default} substitution pattern already used by the kong service's
+# JWT_SECRET, sourced from a root .env file that `docker compose` auto-loads.
+x-app-env: &app-env
+  JWT_SECRET: ${JWT_SECRET:-mindora-dev-jwt-secret-change-in-production}
+  JWT_ISSUER: ${JWT_ISSUER:-mindora-auth}
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: mindora-postgres
+    restart: unless-stopped
+    # Required for `CREATE EXTENSION timescaledb` (used by mindora_mood for
+    # time_bucket()/hypertables) — the extension must be preloaded at server
+    # start, not just enabled per-database.
+    command: postgres -c shared_preload_libraries=timescaledb
+    environment:
+      POSTGRES_USER: mindora
+      POSTGRES_PASSWORD: mindora
+      POSTGRES_DB: mindora
+      # ⚠️  DEVELOPMENT ONLY — NEVER use POSTGRES_HOST_AUTH_METHOD: trust in production.
+      # This disables PostgreSQL password authentication entirely for all incoming connections.
+      # It exists here solely to work around Docker Desktop's Windows bridge gateway routing,
+      # which causes Node.js host connections to arrive at PostgreSQL from 172.18.0.1 rather
+      # than 127.0.0.1, bypassing the existing trust rule for the loopback address.
+      # In production, this variable must be removed and proper scram-sha-256 authentication
+      # with strong credentials managed via AWS Secrets Manager must be used instead.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      # 5434 on the host — avoids collision with a local Windows PostgreSQL
+      # install on 5432, and (on this machine) a native Linux postgresql
+      # systemd service already bound to 5433. Internal service-to-service
+      # traffic always uses postgres:5432 (the container's own port), so
+      # this only affects host-side psql/GUI access.
+      - '5434:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mindora -d mindora']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    container_name: mindora-mongodb
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mindora-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: mindora-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: mindora
+      RABBITMQ_DEFAULT_PASS: mindora
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kong:
+    image: kong:3.6
+    container_name: mindora-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: '0.0.0.0:8000'
+      KONG_ADMIN_LISTEN: '0.0.0.0:8001'
+      KONG_LOG_LEVEL: notice
+      JWT_SECRET: ${JWT_SECRET:-mindora-dev-jwt-secret-change-in-production}
+    volumes:
+      - ./infrastructure/kong/kong.yml:/kong/kong.yml:ro
+    ports:
+      - '8000:8000'
+      - '8001:8001'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      - postgres
+      - redis
+
+  # ── App services ──────────────────────────────────────────────────────
+  # Each publishes its port to the host, so Kong's host.docker.internal
+  # routing (infrastructure/kong/kong.yml) reaches these the same way it
+  # reaches a host-run `npm run dev` instance — no Kong config changes
+  # needed, and the two stay interchangeable per-service.
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: mindora-auth-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: 3001
+      AUTH_DATABASE_URL: postgresql://mindora:mindora@postgres:5432/mindora_auth
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://mindora:mindora@rabbitmq:5672
+      APP_BASE_URL: http://localhost:3001
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3001/oauth/google/callback}
+    ports:
+      - '3001:3001'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3001/health',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  user-service:
+    build:
+      context: .
+      dockerfile: apps/user-service/Dockerfile
+    container_name: mindora-user-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: 3002
+      USER_DATABASE_URL: postgresql://mindora:mindora@postgres:5432/mindora_user
+      # Therapist application documents (license PDFs/IDs) - GridFS on the
+      # same shared Mongo instance messaging-service/community-service
+      # already use, own database.
+      MONGO_URI: mongodb://mongodb:27017/mindora_user_documents
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://mindora:mindora@rabbitmq:5672
+      # Pre-existing gap, not previously noticed: without these, every
+      # internal call this service makes (fetchAuthUser, the existing
+      # /internal/users/:id/suspend|reactivate proxy, and the new therapist-
+      # application approve/suspend flows) silently falls back to
+      # http://localhost:8000, which inside this container doesn't reach
+      # Kong — found live via a 503 on PUT /admin/therapists/:id/suspend
+      # tracing back to ECONNREFUSED, not a fault in the new code itself.
+      KONG_URL: http://kong:8000
+      # Distinct from KONG_URL above - this one is handed to a *browser*
+      # (the therapist-document download link, since window.open() can't
+      # reach the container-internal http://kong:8000 host). Found live:
+      # a generated download link pointed at an unreachable host from
+      # outside Docker until this was set explicitly, even though the
+      # internal KONG_URL was already correct for this container's own
+      # outgoing calls.
+      PUBLIC_KONG_URL: http://localhost:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+    ports:
+      - '3002:3002'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3002/health',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  appointment-service:
+    build:
+      context: .
+      dockerfile: apps/appointment-service/Dockerfile
+    container_name: mindora-appointment-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: 3003
+      APPOINTMENT_DATABASE_URL: postgresql://mindora:mindora@postgres:5432/mindora_appointment
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://mindora:mindora@rabbitmq:5672
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      # Same pre-existing gap as user-service had (see its comment above):
+      # isTherapist() and the new GET /patients name-resolution both default
+      # to http://localhost:8000 without this, which doesn't reach Kong from
+      # inside this container — meaning appointment booking's therapist
+      # validation has likely never actually succeeded in this local
+      # docker-compose setup before now.
+      KONG_URL: http://kong:8000
+    ports:
+      - '3003:3003'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3003/health',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  mood-tracking-service:
+    build:
+      context: .
+      dockerfile: apps/mood-tracking-service/Dockerfile
+    container_name: mindora-mood-tracking-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: 3004
+      MOOD_DATABASE_URL: postgresql://mindora:mindora@postgres:5432/mindora_mood
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://mindora:mindora@rabbitmq:5672
+      MOOD_JOURNAL_ENCRYPTION_KEY: ${MOOD_JOURNAL_ENCRYPTION_KEY:-mindora-dev-mood-journal-key-32bytes!!}
+      KONG_URL: http://kong:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+    ports:
+      - '3004:3004'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3004/health',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  community-service:
+    build:
+      context: .
+      dockerfile: apps/community-service/Dockerfile
+    container_name: mindora-community-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: 3005
+      MONGO_URI: mongodb://mongodb:27017/mindora_community
+      REDIS_URL: redis://redis:6379
+      KONG_URL: http://kong:8000
+      RABBITMQ_URL: amqp://mindora:mindora@rabbitmq:5672
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      COMMUNITY_ENCRYPTION_KEY: ${COMMUNITY_ENCRYPTION_KEY:-mindora-dev-community-key-32bytes!!}
+    ports:
+      - '3005:3005'
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3005/health',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  messaging-service:
+    build:
+      context: .
+      dockerfile: apps/messaging-service/Dockerfile
+    container_name: mindora-messaging-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: 3006
+      MONGO_URI: mongodb://mongodb:27017/mindora_messaging
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://mindora:mindora@rabbitmq:5672
+      KONG_URL: http://kong:8000
+      # Only enforced because the image sets NODE_ENV=production — with no
+      # default here, the Socket.io connection this env is meant to allow
+      # was silently CORS-blocked for every frontend origin (confirmed
+      # during a local QA pass: 'blocked by CORS policy' on socket.io's own
+      # polling handshake, not just for one specific dev port). Kong's own
+      # allowlist (infrastructure/kong/kong.yml) is the source of truth for
+      # what a real deployment should list here; these are just the local
+      # dev origins that showed up while testing.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3010}
+      MESSAGE_ENCRYPTION_KEY: ${MESSAGE_ENCRYPTION_KEY:-mindora-dev-message-key-32bytes!!}
+    ports:
+      - '3006:3006'
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3006/health',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  ai-integration-service:
+    build:
+      context: .
+      dockerfile: apps/ai-integration-service/Dockerfile
+    container_name: mindora-ai-integration-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      AI_SERVICE_PORT: 3007
+      AI_DATABASE_URL: postgresql://mindora:mindora@postgres:5432/mindora_ai
+      REDIS_URL: redis://redis:6379
+      THERAPY_CHATBOT_BASE_URL: ${THERAPY_CHATBOT_BASE_URL:-https://chatbot.mindora.rw}
+      MINDORA_INTEGRATION_KEY: ${MINDORA_INTEGRATION_KEY:-}
+      AI_INTERACTION_ENCRYPTION_KEY: ${AI_INTERACTION_ENCRYPTION_KEY:-mindora-dev-ai-interaction-key-32bytes!!}
+    ports:
+      - '3007:3007'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3007/health',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: apps/notification-service/Dockerfile
+    container_name: mindora-notification-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: 3008
+      NOTIFICATION_DATABASE_URL: postgresql://mindora:mindora@postgres:5432/mindora_notifications
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://mindora:mindora@rabbitmq:5672
+      USER_SERVICE_URL: http://user-service:3002
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      RESEND_EMAIL_API_KEY: ${RESEND_EMAIL_API_KEY:-}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      AT_API_KEY: ${AT_API_KEY:-}
+      AT_USERNAME: ${AT_USERNAME:-}
+      SMS_ENABLED: ${SMS_ENABLED:-false}
+    ports:
+      - '3008:3008'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3008/health',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: apps/admin-service/Dockerfile
+    container_name: mindora-admin-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      ADMIN_SERVICE_PORT: 3009
+      ADMIN_DATABASE_URL: postgresql://mindora:mindora@postgres:5432/mindora_admin
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://mindora:mindora@rabbitmq:5672
+      KONG_URL: http://kong:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+    ports:
+      - '3009:3009'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3009/health',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  mongodb_config:
+  redis_data:
+  rabbitmq_data:
